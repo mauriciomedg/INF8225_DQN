@@ -34,6 +34,15 @@ void UDQNComponent::BeginPlay()
 	TcpServer->OnJsonLine.AddDynamic(this, &UDQNComponent::OnTcpLine);
 	TcpServer->OnClientConnected.AddDynamic(this, &UDQNComponent::OnClientConnected);
 
+	if (!PlayerActor)
+	{
+		APlayerController* PC = GetWorld()->GetFirstPlayerController();
+		if (PC)
+		{
+			PlayerActor = Cast<AActor>(PC->GetPawn());
+		}
+	}
+		
 	const float Dt = 1.f / FMath::Max(1.f, StepHz);
 	GetOwner()->GetWorldTimerManager().SetTimer(StepTimer, this, &UDQNComponent::StepLoop, Dt, true);
 		
@@ -122,48 +131,27 @@ void UDQNComponent::ResetEpisode()
 {
 	StepCount = 0;
 
+	// Reset Agent location
 	UPrimitiveComponent* Prim = FindSimulatingPrim(GetOwner());
 	if (!Prim) return;
 
-	// Stop immediately (clears solver state better than high-level sometimes)
 	if (FBodyInstance* BI = Prim->GetBodyInstance())
 	{
 		BI->SetLinearVelocity(FVector::ZeroVector, false);
 		BI->SetAngularVelocityInRadians(FVector::ZeroVector, false);
 
 		// Teleport physics body transform directly
-		BI->SetBodyTransform(FTransform(FRotator::ZeroRotator, FVector(0, 0, 100)), ETeleportType::TeleportPhysics);
+		BI->SetBodyTransform(FTransform(FRotator::ZeroRotator, AgentStartLocation), ETeleportType::TeleportPhysics);
 
 		// Optional: ensure it's awake
 		BI->WakeInstance();
 	}
-	else
-	{
-		// Fallback (still good)
-		Prim->SetPhysicsLinearVelocity(FVector::ZeroVector);
-		Prim->SetPhysicsAngularVelocityInRadians(FVector::ZeroVector);
-		Prim->SetWorldLocationAndRotation(FVector(0, 0, 100), FRotator::ZeroRotator, false, nullptr, ETeleportType::TeleportPhysics);
-		Prim->WakeAllRigidBodies();
-	}
 
-	// reset player (simple: fixed point or random in bounds)
-	
-	APlayerController* PC = GetWorld()->GetFirstPlayerController();
-	if (!PC) return;
-
-	FRotator TargetRotation = FRotator::ZeroRotator;
-
-	ACharacter* Character = Cast<ACharacter>(PC->GetPawn());
+	// reset player	
+	ACharacter* Character = Cast<ACharacter>(PlayerActor);
 	if (Character)
-		Character->TeleportTo(TargetLocation, TargetRotation);
-
-	PlayerActor = Cast<AActor>(PC->GetPawn());
-
-	//const float R = 800.f;
-	//const FVector PlayerPos(FMath::FRandRange(-R, R), FMath::FRandRange(-R, R), PlayerActor->GetActorLocation().Z);
-	//PlayerActor->SetActorLocation(PlayerPos);
+		Character->TeleportTo(PlayerStartLocation, FRotator::ZeroRotator);
 	
-
 	{
 		float d = 0; 
 		TArray<float> o; ComputeObs(o, d);

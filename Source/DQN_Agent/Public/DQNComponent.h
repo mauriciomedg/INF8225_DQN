@@ -29,11 +29,14 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Networking")
 	TObjectPtr<UTcpServer> TcpServer;
 
-	UPROPERTY(EditAnywhere)
+	UPROPERTY(VisibleAnywhere)
 	TObjectPtr<AActor> PlayerActor;
 
 	UPROPERTY(EditAnywhere)
-	FVector TargetLocation;
+	FVector PlayerStartLocation;
+
+	UPROPERTY(EditAnywhere)
+	FVector AgentStartLocation;
 
 	UPROPERTY(EditAnywhere)
 	float StepHz = 20.f;
