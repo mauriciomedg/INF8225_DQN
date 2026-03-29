@@ -8,7 +8,16 @@ public class DQN_Agent : ModuleRules
 	{
 		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
 	
-		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "InputCore" });
+		PublicDependencyModuleNames.AddRange(new string[] { 
+			"Core", 
+			"CoreUObject", 
+			"Engine", 
+			"InputCore",
+            "Sockets",
+            "Json",
+            "JsonUtilities",
+            "Networking"
+        });
 
 		PrivateDependencyModuleNames.AddRange(new string[] {  });
 
