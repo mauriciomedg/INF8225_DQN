@@ -48,7 +48,10 @@ public:
 	float CatchRadius = 20.f;
 
 	UPROPERTY(EditAnywhere)
-	float MaxDistance = 3000.f;
+	float MaxDistance = 30.f; // m
+
+	UPROPERTY(EditAnywhere)
+	float MaxRelativeSpeed = 18.f; // m/s
 
 	UPROPERTY(EditAnywhere)
 	int32 MaxStepsPerEpisode = 300;
@@ -65,6 +68,7 @@ private:
 	int32 StepCount = 0;
 	int32 GlobalT = 0;
 	float PrevDist = 0.f;
+	float PrevSpeed = 0.f;
 
 private:
 	UFUNCTION()
@@ -82,6 +86,6 @@ private:
 	void SendReset();
 	void SendStep(const TArray<float>& Obs, float Reward, bool bDone);
 
-	void ComputeObs(TArray<float>& OutObs, float& OutDist) const;
+	void ComputeObs(TArray<float>& OutObs, FVector2D& OutRelativeDistance, FVector2D& OutRelativeVelocity) const;
 		
 };

@@ -6,6 +6,10 @@
 #include "GameFramework/Character.h"
 #include "GameFramework/CharacterMovementComponent.h"
 
+namespace
+{
+	static float CM_TO_M = 1.0f / 100.0f;
+}
 // Sets default values for this component's properties
 UDQNComponent::UDQNComponent()
 {
@@ -153,42 +157,48 @@ void UDQNComponent::ResetEpisode()
 		Character->TeleportTo(PlayerStartLocation, FRotator::ZeroRotator);
 	
 	{
-		float d = 0; 
-		TArray<float> o; ComputeObs(o, d);
-		PrevDist = d;
+		FVector2D d;
+		FVector2D v;
+		TArray<float> o; ComputeObs(o, d, v);
+		//PrevDist = d;
 	}
 }
 
-void UDQNComponent::ComputeObs(TArray<float>& OutObs, float& OutDist) const
+void UDQNComponent::ComputeObs(TArray<float>& OutObs, FVector2D& OutRelativeDistance, FVector2D& OutRelativeVelocity) const
 {
 	OutObs.Reset();
 	OutObs.SetNum(4);
 
-	const FVector P = PlayerActor ? PlayerActor->GetActorLocation() : FVector::ZeroVector;
-	const FVector S = GetOwner()->GetActorLocation();
+	const FVector PlayerPosition = PlayerActor ? PlayerActor->GetActorLocation() : FVector::ZeroVector;
+	const FVector AgentPosition = GetOwner()->GetActorLocation();
 
-	const FVector D = P - S;
-	OutDist = FVector(D.X, D.Y, 0).Size();
-
-	const float Inv = 1.f / FMath::Max(1.f, MaxDistance);
-
+	const FVector RelativeDistance = (PlayerPosition - AgentPosition) * CM_TO_M;
+	
 	FVector PlayerVelocity = FVector::Zero();
 
 	if (PlayerActor)
+	{
 		PlayerVelocity = PlayerActor->GetVelocity();
+	}
 
-	OutObs[0] = (D.X + PlayerVelocity.X) * Inv;
-	OutObs[1] = (D.Y + PlayerVelocity.Y) * Inv;
-
-	FVector V = FVector::ZeroVector;
+	FVector AgentVelocity = FVector::ZeroVector;
 	UPrimitiveComponent* RootPrim = Cast<UPrimitiveComponent>(GetOwner()->GetRootComponent());
 	if (RootPrim)
-		V = RootPrim->GetPhysicsLinearVelocity();
+		AgentVelocity = RootPrim->GetPhysicsLinearVelocity();
 
-	const float VNorm = 1.f / 100.f;
-	OutObs[2] = FMath::Clamp(V.X * VNorm, -1.f, 1.f);
-	OutObs[3] = FMath::Clamp(V.Y * VNorm, -1.f, 1.f);
+	auto RelativeVelocity = (AgentVelocity - PlayerVelocity) * CM_TO_M;
 
+	// Normalize for the network DQN
+	auto RelativeVelocityNormalized = RelativeVelocity / MaxRelativeSpeed;
+	auto RelativeDistanceNormalized = RelativeDistance / MaxDistance;
+
+	OutObs[0] = FMath::Clamp(RelativeDistanceNormalized.X, -1.f, 1.f);
+	OutObs[1] = FMath::Clamp(RelativeDistanceNormalized.Y, -1.f, 1.f);
+	OutObs[2] = FMath::Clamp(RelativeVelocityNormalized.X, -1.f, 1.f);
+	OutObs[3] = FMath::Clamp(RelativeVelocityNormalized.Y, -1.f, 1.f);
+
+	OutRelativeDistance = FVector2D(RelativeDistance.X, RelativeDistance.Y);
+	OutRelativeVelocity = FVector2D(RelativeVelocity.X, RelativeVelocity.Y);
 	//UE_LOG(LogTemp, Warning, TEXT("V raw X %f Y %f"), float(V.X), float(V.Y));
 	//UE_LOG(LogTemp, Warning, TEXT("V X %f Y %f"), OutObs[2], OutObs[3]);
 }
@@ -216,9 +226,10 @@ void UDQNComponent::SendReset()
 	if (!TcpServer->IsClientConnected())
 		return;
 
-	float Dist = 0.f;
+	FVector2D Dist;
+	FVector2D Speed;
 	TArray<float> Obs;
-	ComputeObs(Obs, Dist);
+	ComputeObs(Obs, Dist, Speed);
 
 	// build JSON
 	TSharedPtr<FJsonObject> Obj = MakeShared<FJsonObject>();
@@ -284,31 +295,41 @@ void UDQNComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorCo
 		return;
 
 	// Now physics has advanced since the action was applied
-	float Dist = 0.f;
+	FVector2D RelDist;
+	FVector2D RelVelocity;
 	TArray<float> Obs;
-	ComputeObs(Obs, Dist);
+	ComputeObs(Obs, RelDist, RelVelocity);
 		
 	float Reward = 0.0f;
 
-	// progress reward
-	Reward += (PrevDist - Dist) / MaxDistance;  // roughly in [-0.5,0.5]
+	auto RelVelocityClosing = RelDist.GetSafeNormal().Dot(RelVelocity) / MaxRelativeSpeed;
 	
+	//UE_LOG(LogTemp, Warning, TEXT("Velocite %f"), RelVelocityClosing);
+
+	Reward += RelVelocityClosing;
+
+	auto RelDistanceClosing = (1 - RelDist.Length() / MaxDistance);
+	//UE_LOG(LogTemp, Warning, TEXT("Distance %f"), RelDistanceClosing);
+
+	Reward += RelDistanceClosing;
+
 	StepCount++;
 	GlobalT++;
 
 	const bool bTimeout = (StepCount >= MaxStepsPerEpisode);
-	const bool bTooFar = (Dist >= MaxDistance);
+	const bool bTooFar = (RelDist.Length() >= MaxDistance);
 	
 	bool bDone = bTimeout || bTooFar;
 
 	// “stay close” bonus
-	if (Dist <= CatchRadius && (PrevDist - Dist > 0))
-		Reward += 0.2f;
+	//if (Dist <= CatchRadius && (PrevDist - Dist < 0))
+	//	Reward += 0.2f;
 
 	if (bTooFar) Reward -= 0.5f;
 	
-	PrevDist = Dist;
-	//UE_LOG(LogTemp, Warning, TEXT("Reward %f Dist %f"), Reward, Dist);
+	//PrevDist = Dist;
+	//PrevSpeed = Speed;
+	UE_LOG(LogTemp, Warning, TEXT("Reward %f"), Reward);
 
 	// Send the resulting state after the action
 	SendStep(Obs, Reward, bDone);
@@ -325,7 +346,7 @@ void UDQNComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorCo
 	// Debug draw ok here
 	if (PlayerActor)
 	{
-		DrawDebugSphere(GetWorld(), PlayerActor->GetActorLocation(), CatchRadius, 16, FColor::Green, false, 0.1f, 0, 2.f);
+		DrawDebugSphere(GetWorld(), PlayerActor->GetActorLocation(), MaxDistance / CM_TO_M, 16, FColor::Green, false, 0.1f, 0, 2.f);
 	}
 }
 
