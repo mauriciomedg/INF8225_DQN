@@ -321,15 +321,9 @@ void UDQNComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorCo
 	
 	bool bDone = bTimeout || bTooFar;
 
-	// “stay close” bonus
-	//if (Dist <= CatchRadius && (PrevDist - Dist < 0))
-	//	Reward += 0.2f;
-
 	if (bTooFar) Reward -= 0.5f;
 	
-	//PrevDist = Dist;
-	//PrevSpeed = Speed;
-	UE_LOG(LogTemp, Warning, TEXT("Reward %f"), Reward);
+	//UE_LOG(LogTemp, Warning, TEXT("Reward %f"), Reward);
 
 	// Send the resulting state after the action
 	SendStep(Obs, Reward, bDone);
