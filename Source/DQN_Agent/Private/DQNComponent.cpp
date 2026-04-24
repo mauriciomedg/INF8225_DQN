@@ -279,31 +279,18 @@ void UDQNComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	Super::EndPlay(EndPlayReason);
 }
 
-// Called every frame
-void UDQNComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
+void UDQNComponent::TickForTraining()
 {
-	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
-
-	if (TcpServer)
-		TcpServer->Tick(DeltaTime);
-
-	// Only generate a transition after we applied an action
-	if (!TcpServer || !TcpServer->IsClientConnected())
-		return;
-
-	if (!bWaitingForPostPhysics)
-		return;
-
 	// Now physics has advanced since the action was applied
 	FVector2D RelDist;
 	FVector2D RelVelocity;
 	TArray<float> Obs;
 	ComputeObs(Obs, RelDist, RelVelocity);
-		
+
 	float Reward = 0.0f;
 
 	auto RelVelocityClosing = RelDist.GetSafeNormal().Dot(RelVelocity) / MaxRelativeSpeed;
-	
+
 	//UE_LOG(LogTemp, Warning, TEXT("Velocite %f"), RelVelocityClosing);
 
 	Reward += RelVelocityClosing;
@@ -318,11 +305,11 @@ void UDQNComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorCo
 
 	const bool bTimeout = (StepCount >= MaxStepsPerEpisode);
 	const bool bTooFar = (RelDist.Length() >= MaxDistance);
-	
+
 	bool bDone = bTimeout || bTooFar;
 
 	if (bTooFar) Reward -= 0.5f;
-	
+
 	//UE_LOG(LogTemp, Warning, TEXT("Reward %f"), Reward);
 
 	// Send the resulting state after the action
@@ -342,5 +329,47 @@ void UDQNComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorCo
 	{
 		DrawDebugSphere(GetWorld(), PlayerActor->GetActorLocation(), MaxDistance / CM_TO_M, 16, FColor::Green, false, 0.1f, 0, 2.f);
 	}
+}
+
+void UDQNComponent::TickForInference()
+{
+	// Now physics has advanced since the action was applied
+	FVector2D RelDist;
+	FVector2D RelVelocity;
+	TArray<float> Obs;
+	ComputeObs(Obs, RelDist, RelVelocity);
+	
+	// Send the resulting state after the action
+	SendStep(Obs, 0.0f, false);
+
+	// We have completed one env step
+	bWaitingForPostPhysics = false;
+
+}
+
+// Called every frame
+void UDQNComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
+{
+	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
+
+	if (TcpServer)
+		TcpServer->Tick(DeltaTime);
+
+	// Only generate a transition after we applied an action
+	if (!TcpServer || !TcpServer->IsClientConnected())
+		return;
+
+	if (!bWaitingForPostPhysics)
+		return;
+
+	if (bInferenceMode)
+	{
+		TickForInference();
+	}
+	else
+	{
+		TickForTraining();
+	}
+	
 }
 

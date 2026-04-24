@@ -45,16 +45,16 @@ public:
 	float ImpulseStrength = 600.f;
 
 	UPROPERTY(EditAnywhere)
-	float CatchRadius = 20.f;
-
-	UPROPERTY(EditAnywhere)
 	float MaxDistance = 30.f; // m
 
-	UPROPERTY(EditAnywhere)
+	UPROPERTY(EditAnywhere, Category = "DQN")
 	float MaxRelativeSpeed = 18.f; // m/s
 
-	UPROPERTY(EditAnywhere)
+	UPROPERTY(EditAnywhere, Category = "DQN")
 	int32 MaxStepsPerEpisode = 300;
+
+	UPROPERTY(EditAnywhere, Category = "DQN")
+	bool bInferenceMode = true;
 
 private:
 	FTimerHandle StepTimer;
@@ -88,4 +88,6 @@ private:
 
 	void ComputeObs(TArray<float>& OutObs, FVector2D& OutRelativeDistance, FVector2D& OutRelativeVelocity) const;
 		
+	void TickForTraining();
+	void TickForInference();
 };
