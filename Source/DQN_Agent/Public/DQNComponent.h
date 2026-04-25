@@ -53,6 +53,8 @@ public:
 	UPROPERTY(EditAnywhere, Category = "DQN")
 	int32 MaxStepsPerEpisode = 300;
 
+	UPROPERTY(EditAnywhere, Category = "DQN", meta = (ClampMin = "0.0", ClampMax = "1.0"))
+	float Gamma = 0.99f;																					   
 	UPROPERTY(EditAnywhere, Category = "DQN")
 	bool bInferenceMode = true;
 
@@ -69,7 +71,9 @@ private:
 	int32 GlobalT = 0;
 	float PrevDist = 0.f;
 	float PrevSpeed = 0.f;
-
+	float PrevPotential = 0.f;
+	bool  bHasPrevPotential = false;
+ 
 private:
 	UFUNCTION()
 	void OnTcpLine(const FString& Line);
@@ -87,6 +91,7 @@ private:
 	void SendStep(const TArray<float>& Obs, float Reward, bool bDone);
 
 	void ComputeObs(TArray<float>& OutObs, FVector2D& OutRelativeDistance, FVector2D& OutRelativeVelocity) const;
+    float ComputePotential(const FVector2D& RelDist) const;														
 		
 	void TickForTraining();
 	void TickForInference();

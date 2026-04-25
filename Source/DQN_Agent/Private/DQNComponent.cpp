@@ -154,13 +154,22 @@ void UDQNComponent::ResetEpisode()
 	// reset player	
 	ACharacter* Character = Cast<ACharacter>(PlayerActor);
 	if (Character)
+    {
 		Character->TeleportTo(PlayerStartLocation, FRotator::ZeroRotator);
 	
+		if (UCharacterMovementComponent* Move = Character->GetCharacterMovement())
+		{
+			Move->StopMovementImmediately();
+			Move->Velocity = FVector::ZeroVector;
+		}																				 
+    }
 	{
 		FVector2D d;
 		FVector2D v;
-		TArray<float> o; ComputeObs(o, d, v);
-		//PrevDist = d;
+		TArray<float> o; 
+		ComputeObs(o, d, v);
+		PrevPotential = ComputePotential(d);
+		bHasPrevPotential = true;
 	}
 }
 
@@ -203,6 +212,14 @@ void UDQNComponent::ComputeObs(TArray<float>& OutObs, FVector2D& OutRelativeDist
 	//UE_LOG(LogTemp, Warning, TEXT("V X %f Y %f"), OutObs[2], OutObs[3]);
 }
 
+float UDQNComponent::ComputePotential(const FVector2D& RelDist) const
+{
+	// Phi(s) = -|RelDist| / MaxDistance, clamped to [-1, 0].
+	// Higher (closer to 0) when the agent is near the player.
+	const float D = RelDist.Length();
+	const float Norm = (MaxDistance > KINDA_SMALL_NUMBER) ? (D / MaxDistance) : 0.f;
+	return -FMath::Clamp(Norm, 0.f, 1.f);
+} 
 void UDQNComponent::ApplyAction(int32 A)
 {
 	UPrimitiveComponent* RootPrim = Cast<UPrimitiveComponent>(GetOwner()->GetRootComponent());
@@ -286,8 +303,17 @@ void UDQNComponent::TickForTraining()
 	FVector2D RelVelocity;
 	TArray<float> Obs;
 	ComputeObs(Obs, RelDist, RelVelocity);
-
-	float Reward = 0.0f;
+	
+	const float CurrPotential = ComputePotential(RelDist);
+	float ShapedReward = 0.f;
+	if (bHasPrevPotential)
+	{
+		ShapedReward = Gamma * CurrPotential - PrevPotential;
+	}
+	PrevPotential = CurrPotential;
+	bHasPrevPotential = true;
+	
+	float Reward = ShapedReward;
 
 	auto RelVelocityClosing = RelDist.GetSafeNormal().Dot(RelVelocity) / MaxRelativeSpeed;
 
@@ -310,7 +336,7 @@ void UDQNComponent::TickForTraining()
 
 	if (bTooFar) Reward -= 0.5f;
 
-	//UE_LOG(LogTemp, Warning, TEXT("Reward %f"), Reward);
+	//UE_LOG(LogTemp, Warning, TEXT("Reward %f"), ShapedReward);
 
 	// Send the resulting state after the action
 	SendStep(Obs, Reward, bDone);
