@@ -7,6 +7,7 @@ import torch.nn as nn
 import torch.optim as optim
 import csv
 import os
+import sys
 
 from net_io import JsonLineClient
 
@@ -17,6 +18,25 @@ LOG_PATH = "training_log.csv"
 # Must match Unreal value
 MAX_DISTANCE_METERS = 1.0
 
+# Seuil de succès : un épisode est considéré réussi si la distance finale
+# au joueur est inférieure à cette valeur. Choix arbitraire — à adapter
+# selon l'échelle réelle de l'environnement Unreal.
+SUCCESS_DISTANCE_M = 0.2
+
+# Seed par défaut, surchargeable via argv[1].
+DEFAULT_SEED = 42
+
+
+def set_global_seed(seed: int) -> None:
+    """Fixe les générateurs aléatoires pour la reproductibilité."""
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
+    # Note: le déterminisme complet de PyTorch nécessiterait aussi
+    # torch.use_deterministic_algorithms(True), mais ça impacte les perfs
+    # et ne change rien aux résultats côté CPU pour ce projet.
 
 def append_training_log(row: dict):
     file_exists = os.path.exists(LOG_PATH)
@@ -29,6 +49,7 @@ def append_training_log(row: dict):
                 "episode_reward",
                 "episode_length",
                 "final_distance",
+                "success",
                 "epsilon",
                 "avg_loss",
             ],
@@ -104,6 +125,16 @@ def estimate_distance_from_obs(obs, max_distance_m):
 
 
 def main():
+    # Seed : argv[1] si fourni, sinon DEFAULT_SEED
+    seed = DEFAULT_SEED
+    if len(sys.argv) > 1:
+        try:
+            seed = int(sys.argv[1])
+        except ValueError:
+            print(f"[WARN] seed invalide '{sys.argv[1]}', utilisation de {DEFAULT_SEED}")
+
+    set_global_seed(seed)
+    print(f"[INFO] seed = {seed}")												  
     client = JsonLineClient(HOST, PORT)
     client.connect()
 
@@ -181,12 +212,14 @@ def main():
 
             if done:
                 avg_loss = loss_sum / max(loss_count, 1)
-
+                # success : 1 si l'agent a fini suffisamment près du joueur
+                success = 1 if final_distance < SUCCESS_DISTANCE_M else 0																			
                 append_training_log({
                     "episode": episode_idx,
                     "episode_reward": ep_reward,
                     "episode_length": ep_len,
                     "final_distance": final_distance,
+                    "success": success,
                     "epsilon": eps,
                     "avg_loss": avg_loss,
                 })
@@ -196,6 +229,7 @@ def main():
                     f"reward={ep_reward:.3f} "
                     f"len={ep_len} "
                     f"final_dist={final_distance:.3f} "
+                    f"success={success} " 
                     f"eps={eps:.3f} "
                     f"avg_loss={avg_loss:.6f}"
                 )
