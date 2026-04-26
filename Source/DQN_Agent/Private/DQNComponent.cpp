@@ -351,10 +351,10 @@ void UDQNComponent::TickForTraining()
 	}
 
 	// Debug draw ok here
-	if (PlayerActor)
-	{
-		DrawDebugSphere(GetWorld(), PlayerActor->GetActorLocation(), MaxDistance / CM_TO_M, 16, FColor::Green, false, 0.1f, 0, 2.f);
-	}
+	//if (PlayerActor)
+	//{
+	//	DrawDebugSphere(GetWorld(), PlayerActor->GetActorLocation(), MaxDistance / CM_TO_M, 16, FColor::Green, false, 0.1f, 0, 2.f);
+	//}
 }
 
 void UDQNComponent::TickForInference()
