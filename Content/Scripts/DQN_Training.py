@@ -136,7 +136,7 @@ def main():
     tgt = DQN()
     tgt.load_state_dict(qnet.state_dict())
     opt = optim.Adam(qnet.parameters(), lr=1e-3)
-    D = Replay() # replay buffer
+    D = Replay(2000) # replay buffer
 
     eps, eps_min, eps_decay = 1.0, 0.05, 0.9995 # for greedy policy
     train_after = 512
@@ -236,7 +236,7 @@ def main():
                 episode_idx += 1
 
                 last_obs, last_action = None, None
-                
+
                 continue
 
             a2 = select_action(qnet, obs2, eps)
