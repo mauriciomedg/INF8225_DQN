@@ -7,6 +7,7 @@ import torch.nn as nn
 import torch.optim as optim
 import csv
 import os
+from collections import deque
 
 from net_io import JsonLineClient
 
@@ -16,7 +17,6 @@ LOG_PATH = "training_log.csv"
 
 # Must match Unreal value
 MAX_DISTANCE_METERS = 1.0
-
 
 def append_training_log(row: dict):
     file_exists = os.path.exists(LOG_PATH)
@@ -122,6 +122,10 @@ def main():
     last_obs = None
     last_action = None
 
+    # for copy network with best reward moving average
+    best_reward_ma = float("-inf")
+    recent_rewards = deque(maxlen=50)
+
     # episode stats
     episode_idx = 0
     ep_reward = 0.0
@@ -155,10 +159,6 @@ def main():
             if last_obs is not None and last_action is not None:
                 D.push(last_obs, last_action, r, obs2, done)
 
-            a2 = select_action(qnet, obs2, eps)
-            client.send({"type": "action", "a": a2})
-            last_obs, last_action = obs2, a2
-
             ep_reward += r
             ep_len += 1
             final_distance = estimate_distance_from_obs(obs2, MAX_DISTANCE_METERS)
@@ -191,6 +191,14 @@ def main():
                     "avg_loss": avg_loss,
                 })
 
+                recent_rewards.append(ep_reward)
+                reward_ma = sum(recent_rewards) / len(recent_rewards)
+
+                if len(recent_rewards) == recent_rewards.maxlen and reward_ma > best_reward_ma:
+                    best_reward_ma = reward_ma
+                    torch.save(qnet.state_dict(), "best_dqn.pt")
+                    print(f"Saved BEST model at episode={episode_idx} reward_MA50={reward_ma:.3f}")
+
                 print(
                     f"episode={episode_idx} "
                     f"reward={ep_reward:.3f} "
@@ -201,6 +209,12 @@ def main():
                 )
 
                 episode_idx += 1
+
+                continue
+
+            a2 = select_action(qnet, obs2, eps)
+            client.send({"type": "action", "a": a2})
+            last_obs, last_action = obs2, a2
 
             continue
 
