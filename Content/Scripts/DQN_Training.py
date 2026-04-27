@@ -36,7 +36,7 @@ TRAIN_EVERY = 16
 
 NOISE_STD = 0.5
 NOISE_STD_MIN = 0.2
-NOISE_DECAY = 0.994
+NOISE_DECAY = 0.99998
 
 
 def set_global_seed(seed: int) -> None:
@@ -260,6 +260,8 @@ def main():
             final_distance = estimate_distance_from_obs(obs2, MAX_DISTANCE_METERS)
 
             step += 1
+
+            noise_std = max(NOISE_STD_MIN, noise_std * NOISE_DECAY)
             
             if len(replay) >= TRAIN_AFTER and step % TRAIN_EVERY == 0:
                 a_loss, c_loss = train_step(
@@ -308,8 +310,6 @@ def main():
                     f"actor_loss={avg_actor_loss:.6f} "
                     f"critic_loss={avg_critic_loss:.6f}"
                 )
-
-                noise_std = max(NOISE_STD_MIN, noise_std * NOISE_DECAY)
 
                 episode_idx += 1
                 last_obs, last_action = None, None
