@@ -4,7 +4,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 
-LOG_PATH = "training_log.csv"
+LOG_PATH = "training_log_ddpg.csv" #"training_log.csv"
 ROLLING_WINDOW = 50
 
 

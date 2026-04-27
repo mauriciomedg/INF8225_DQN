@@ -29,14 +29,14 @@ CRITIC_LR = 1e-3
 GAMMA = 0.99
 TAU = 0.005
 
-REPLAY_CAPACITY = 2000
+REPLAY_CAPACITY = 50000
 BATCH_SIZE = 64
 TRAIN_AFTER = 512
 TRAIN_EVERY = 4
 
-NOISE_STD = 0.2
+NOISE_STD = 0.1
 NOISE_STD_MIN = 0.05
-NOISE_DECAY = 0.9995
+NOISE_DECAY = 0.9999
 
 
 def set_global_seed(seed: int) -> None:
@@ -126,7 +126,9 @@ def select_action(actor, obs, noise_std=0.0):
         a = actor(x).squeeze(0).cpu().numpy()
 
     if noise_std > 0.0:
-        a = a + np.random.normal(0.0, noise_std, size=a.shape)
+        a_noised = np.random.normal(0.0, noise_std, size=a.shape) 
+        #print("noise", a_noised, "a ", a, "a + noise ", a + a_noised)
+        a = a + a_noised
 
     a = np.clip(a, -1.0, 1.0)
     return a.astype(np.float32)
@@ -258,8 +260,7 @@ def main():
             final_distance = estimate_distance_from_obs(obs2, MAX_DISTANCE_METERS)
 
             step += 1
-            noise_std = max(NOISE_STD_MIN, noise_std * NOISE_DECAY)
-
+            
             if len(replay) >= TRAIN_AFTER and step % TRAIN_EVERY == 0:
                 a_loss, c_loss = train_step(
                     actor, critic, actor_tgt, critic_tgt,
@@ -307,6 +308,8 @@ def main():
                     f"actor_loss={avg_actor_loss:.6f} "
                     f"critic_loss={avg_critic_loss:.6f}"
                 )
+
+                noise_std = max(NOISE_STD_MIN, noise_std * NOISE_DECAY)
 
                 episode_idx += 1
                 last_obs, last_action = None, None
