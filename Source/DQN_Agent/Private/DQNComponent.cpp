@@ -75,12 +75,21 @@ void UDQNComponent::OnTcpLine(const FString& Line)
 
 	if (Type == TEXT("action"))
 	{
-		int32 A = 0;
-		if (Root->TryGetNumberField(TEXT("a"), A))
+		double Ax = 0;
+		double Ay = 0;
+
+		if (!Root->TryGetNumberField(TEXT("ax"), Ax))
 		{
-			PendingAction = A;
-			bHasPendingAction = true;
+			return;
 		}
+
+		if (!Root->TryGetNumberField(TEXT("ay"), Ay))
+		{
+			return;
+		}
+
+		bHasPendingAction = true;
+		PendingAction = FVector2D((float)Ax, (float)Ay);
 	}
 }
 
@@ -203,21 +212,13 @@ void UDQNComponent::ComputeObs(TArray<float>& OutObs, FVector2D& OutRelativeDist
 	//UE_LOG(LogTemp, Warning, TEXT("V X %f Y %f"), OutObs[2], OutObs[3]);
 }
 
-void UDQNComponent::ApplyAction(int32 A)
+void UDQNComponent::ApplyAction(const FVector2D& A)
 {
 	UPrimitiveComponent* RootPrim = Cast<UPrimitiveComponent>(GetOwner()->GetRootComponent());
 	if (!RootPrim) return;
 
-	FVector Imp(0, 0, 0);
-	switch (A)
-	{
-	case 0: Imp = FVector(1, 0, 0); break;
-	case 1: Imp = FVector(-1, 0, 0); break;
-	case 2: Imp = FVector(0, 1, 0); break;
-	case 3: Imp = FVector(0, -1, 0); break;
-	default: break;
-	}
-
+	FVector Imp(A.X, A.Y, 0);
+	
 	RootPrim->AddImpulse(Imp * ImpulseStrength, NAME_None, true);
 }
 

@@ -61,7 +61,7 @@ private:
 
 	// latest action received from python
 	bool bHasPendingAction = false;
-	int32 PendingAction = 0;
+	FVector2D PendingAction;
 
 	bool bWaitingForPostPhysics = false;
 
@@ -81,7 +81,7 @@ private:
 
 	void ResetEpisode();
 
-	void ApplyAction(int32 A);
+	void ApplyAction(const FVector2D& A);
 
 	void SendReset();
 	void SendStep(const TArray<float>& Obs, float Reward, bool bDone);
